@@ -36,7 +36,7 @@ Due to the use of **urllib.request**, I got it only to run under **Pyhton 3.5** 
 
 This script is made for Debian-based Linux-Systems. (Debian/Ubuntu)
 
-**GDebi** has to be installed, to install Plex with all it's dependencies.
+**GDebi** has to be installed, to install Plex with all it's dependencies automaticly.
 
 Install via:
 
