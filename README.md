@@ -24,7 +24,7 @@ A **Python-Script** for updating a Plex-Mediaserver.
 
 ## Python dependencies
 
-Due to the use of **urllib.request**, I got it only to run under Pyhton 3.5 or higher.
+Due to the use of **urllib.request**, I got it only to run under **Pyhton 3.5** or higher.
 
     import urllib.request # Download File and read JSON via HTTPs
     import json # Work with JSON-information
