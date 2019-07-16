@@ -61,6 +61,7 @@ def main():
     if config['amd64']['checksum'] != amd64_checksum:
         config['amd64']['checksum'] = amd64_checksum
         config['amd64']['url'] = amd64_url
+        print(data['computer']['Linux']['items_fixed'])
         if choice == 'amd64':
             install_plex(amd64_url, plex_version, choice)
     if config['armhf']['checksum'] != armhf_checksum:
