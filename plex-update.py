@@ -15,6 +15,7 @@ Original Author: Michael Muyakwa (Version 1.2)
 """
 
 # Standard library imports
+import argparse
 import configparser
 import hashlib
 import json
@@ -31,7 +32,6 @@ import requests
 import urllib.request # Still used by fetch_plex_server_info
 
 # Local application/library specific imports
-# argparse is already imported under "Standard library imports"
 # configparser is already imported under "Standard library imports"
 # sys is already imported under "Standard library imports"
 # os is already imported under "Standard library imports"
@@ -44,12 +44,15 @@ import urllib.request # Still used by fetch_plex_server_info
 # Path is already imported under "Standard library imports"
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PLEX_JSON_URL_DEFAULT = 'https://plex.tv/api/downloads/5.json' # URL to fetch Plex update information
-SCRIPT_VERSION = "1.3" # Current version of this script
+PLEX_JSON_URL_DEFAULT = 'https://plex.tv/api/downloads/5.json'  # URL to fetch Plex update information
+SCRIPT_VERSION = "1.3"  # Current version of this script
 
 
 # Function to install the chosen Deb-File
-def install_plex(deb_url: str, plex_version: str, choice: str, expected_checksum: str, download_only: bool, dry_run: bool) -> bool:
+def install_plex(
+    deb_url: str, plex_version: str, choice: str, expected_checksum: str,
+    download_only: bool, dry_run: bool
+) -> bool:
     """
     Downloads, verifies, and installs a Plex Media Server .deb package.
 
@@ -66,19 +69,25 @@ def install_plex(deb_url: str, plex_version: str, choice: str, expected_checksum
               False otherwise (though most failures will sys.exit).
     """
     if dry_run:
-        logging.info("Dry run: install_plex called, but will not download or install.")
-        return True # Indicate success for dry run flow
+        logging.info(
+            "Dry run: install_plex called, but will not download or install."
+        )
+        return True  # Indicate success for dry run flow
 
     deb_file_name = f"plexmediaserver_{plex_version}_{choice}.deb"
     deb_file_path = SCRIPT_DIR / deb_file_name
     download_successful = False
     checksum_verified = False
-    logging.info(f'Downloading Plex Media Server .deb file from {deb_url} to {deb_file_path}')
+    log_msg_download = (
+        f'Downloading Plex Media Server .deb file from {deb_url} '
+        f'to {deb_file_path}'
+    )
+    logging.info(log_msg_download)
     try:
         response = requests.get(deb_url, stream=True, timeout=30)
-        response.raise_for_status() # Will raise an HTTPError for bad responses (4XX or 5XX)
+        response.raise_for_status()  # Will raise an HTTPError for bad responses
         with open(deb_file_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192): # Read in chunks
+            for chunk in response.iter_content(chunk_size=8192):  # Read in chunks
                 f.write(chunk)
         logging.info("Download complete.")
         download_successful = True
@@ -86,71 +95,89 @@ def install_plex(deb_url: str, plex_version: str, choice: str, expected_checksum
         logging.info(f"Verifying checksum for {deb_file_path}...")
         calculated_checksum = calculate_sha1(deb_file_path)
         if calculated_checksum != expected_checksum:
-            logging.error(f"Checksum mismatch for downloaded file: {deb_file_path}")
-            logging.error(f"Expected: {expected_checksum}, Got: {calculated_checksum}")
-            sys.exit(1) # Exit, file will be removed in finally block if it exists
+            logging.error(
+                f"Checksum mismatch for downloaded file: {deb_file_path}"
+            )
+            logging.error(
+                f"Expected: {expected_checksum}, Got: {calculated_checksum}"
+            )
+            sys.exit(1)  # Exit, file will be removed in finally block
         logging.info(f"Checksum verified for {deb_file_path}.")
         checksum_verified = True
 
         if download_only:
-            logging.info(f"Download of {deb_file_path} complete and checksum verified. Skipped installation due to --download-only flag.")
-            # Note: File is intentionally not removed in finally block if download_only is True and successful.
-            return True # Indicate successful download and verification
+            log_msg_dl_only = (
+                f"Download of {deb_file_path} complete and checksum verified. "
+                "Skipped installation due to --download-only flag."
+            )
+            logging.info(log_msg_dl_only)
+            # Note: File is intentionally not removed in finally block
+            return True  # Indicate successful download and verification
 
         # Proceed with installation
-        cmd = ['gdebi', str(deb_file_path), '--n'] # Use gdebi for automatic dependency handling
-        if os.geteuid() != 0: # Check if running as root
+        cmd = ['gdebi', str(deb_file_path), '--n']  # Use gdebi
+        if os.geteuid() != 0:  # Check if running as root
             logging.info("Plex installation requires sudo privileges.")
-            sudo_confirm = input("Proceed with installation as sudo? (yes/no): ").lower()
+            sudo_confirm = input(
+                "Proceed with installation as sudo? (yes/no): "
+            ).lower()
             if sudo_confirm == 'yes':
-                cmd.insert(0, 'sudo') # Prepend sudo to the command
+                cmd.insert(0, 'sudo')  # Prepend sudo to the command
                 logging.info('Installing as SUDO.')
             else:
                 logging.info("Installation aborted by user due to sudo denial.")
-                if deb_file_path.exists(): # Clean up downloaded file if user aborts
+                if deb_file_path.exists():  # Clean up downloaded file
                     deb_file_path.unlink()
                     logging.info(f"Removed temporary file: {deb_file_path}")
                 sys.exit(0)
-        
+
         logging.info(f'Executing installation command: {" ".join(cmd)}')
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
-            logging.error(f"Installation failed with error code {result.returncode}: {result.stderr.strip()}")
-            sys.exit(1) # File will be removed in finally block
+            log_msg_install_fail = (
+                f"Installation failed with error code {result.returncode}: "
+                f"{result.stderr.strip()}"
+            )
+            logging.error(log_msg_install_fail)
+            sys.exit(1)  # File will be removed in finally block
         else:
             logging.info("Plex Media Server updated successfully.")
             logging.info(f"gdebi output: {result.stdout.strip()}")
-            return True # Indicate successful installation
+            return True  # Indicate successful installation
 
     except requests.exceptions.Timeout:
         logging.error(f"Timeout downloading Plex .deb file from {deb_url}")
         sys.exit(1)
-    except requests.exceptions.RequestException as e: # Covers other requests issues like network problems
+    except requests.exceptions.RequestException as e:  # Covers other requests issues
         logging.error(f"Error downloading Plex .deb file: {e}")
         sys.exit(1)
-    except Exception as e: # Catch any other unexpected error during download/install process
+    except Exception as e:  # Catch any other unexpected error
         logging.error(f"An unexpected error occurred during install_plex: {e}")
         sys.exit(1)
     finally:
         # Cleanup logic:
         # Remove the .deb file if:
-        # 1. It's not a 'download_only' successful operation (i.e., we intended to install or failed before that).
-        # 2. OR if the download was successful but the checksum failed (always remove bad downloads).
+        # 1. It's not a 'download_only' successful operation.
+        # 2. OR if the download was successful but checksum failed.
         if deb_file_path.exists():
-            # Condition 1: Not a successful download_only operation
-            not_successful_download_only = not (download_only and download_successful and checksum_verified)
-            # Condition 2: Downloaded but checksum failed
-            checksum_failed_after_download = download_successful and not checksum_verified
+            not_successful_download_only = not (
+                download_only and download_successful and checksum_verified
+            )
+            checksum_failed_after_download = (
+                download_successful and not checksum_verified
+            )
 
             if not_successful_download_only or checksum_failed_after_download:
                 try:
                     deb_file_path.unlink()
                     logging.info(f"Removed temporary file: {deb_file_path}")
                 except OSError as e:
-                    logging.error(f"Error removing temporary file {deb_file_path}: {e}")
+                    logging.error(
+                        f"Error removing temporary file {deb_file_path}: {e}"
+                    )
 
-    return False # Should only be reached if an unexpected path led here after failure
+    return False  # Should only be reached if an unexpected path led here
 
 
 def load_config(config_file_path: Path) -> configparser.ConfigParser:
@@ -185,17 +212,21 @@ def load_config(config_file_path: Path) -> configparser.ConfigParser:
     """
     config = configparser.ConfigParser()
     try:
-        config.read(config_file_path) # config.read() accepts Path objects
+        config.read(config_file_path)  # config.read() accepts Path objects
     except FileNotFoundError:
         logging.error(f"Configuration file '{config_file_path}' not found.")
         sys.exit(1)
-    except IOError as e: # Catch other I/O errors like permission issues
-        logging.error(f"Error reading configuration file {config_file_path}: {e}")
+    except IOError as e:  # Catch other I/O errors like permission issues
+        logging.error(
+            f"Error reading configuration file {config_file_path}: {e}"
+        )
         sys.exit(1)
     return config
 
 
-def save_config(config_file_path: Path, config_object: configparser.ConfigParser):
+def save_config(
+    config_file_path: Path, config_object: configparser.ConfigParser
+):
     """
     Saves the configuration object to the specified .ini file.
 
@@ -207,11 +238,13 @@ def save_config(config_file_path: Path, config_object: configparser.ConfigParser
         SystemExit: If the configuration file cannot be written.
     """
     try:
-        with open(config_file_path, 'w') as configfile: # open() accepts Path objects
+        with open(config_file_path, 'w') as configfile:  # open() accepts Path
             config_object.write(configfile)
         logging.info(f"Configuration saved to {config_file_path}")
     except IOError as e:
-        logging.error(f"Error writing to configuration file {config_file_path}: {e}")
+        logging.error(
+            f"Error writing to configuration file {config_file_path}: {e}"
+        )
         sys.exit(1)
 
 
@@ -220,17 +253,48 @@ def parse_arguments() -> argparse.Namespace:
     Parses command-line arguments.
 
     Returns:
-        argparse.Namespace: An object containing the parsed command-line arguments.
-                             Attributes include 'architecture', 'verbose', 'dry_run',
-                             and 'download_only'.
+        argparse.Namespace: An object containing the parsed command-line
+                             arguments. Attributes include 'architecture',
+                             'verbose', 'dry_run', and 'download_only'.
     """
-    parser = argparse.ArgumentParser(description="This script installs/updates Plex Media Server on Debian-based systems.")
-    parser.add_argument('architecture', choices=['amd64', 'armhf'], help='Target architecture for Plex update (e.g., amd64, armhf)')
-    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose logging (DEBUG level).')
-    parser.add_argument('--version', action='version', version=f'%(prog)s {SCRIPT_VERSION}')
-    parser.add_argument('--dry-run', action='store_true', help='Check for updates and show what would happen, but do not download or install.')
-    parser.add_argument('--download-only', action='store_true', help='Download the update package but do not install it. The configuration will be updated if download is successful.')
-    
+    parser = argparse.ArgumentParser(
+        description="Installs/updates Plex Media Server on Debian-based systems."
+    )
+    parser.add_argument(
+        'architecture',
+        choices=['amd64', 'armhf'],
+        help='Target architecture for Plex update (e.g., amd64, armhf)'
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose logging (DEBUG level).'
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'%(prog)s {SCRIPT_VERSION}'
+    )
+    dry_run_help = (
+        'Check for updates and show what would happen, but do not download or '
+        'install. The configuration file will not be modified.'
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help=dry_run_help
+    )
+    download_only_help = (
+        'Download the update package if available and verify its checksum, '
+        'but do not install it. The configuration file will be updated if '
+        'the download is successful.'
+    )
+    parser.add_argument(
+        '--download-only',
+        action='store_true',
+        help=download_only_help
+    )
+
     args = parser.parse_args()
     logging.debug(f"Parsed command-line arguments: {args}")
     return args
@@ -267,15 +331,17 @@ def calculate_sha1(filepath: Path) -> str:
     """
     sha1 = hashlib.sha1()
     try:
-        with open(filepath, 'rb') as f: # open() accepts Path objects
+        with open(filepath, 'rb') as f:  # open() accepts Path objects
             while True:
                 data = f.read(8192)  # Read in chunks of 8KB
                 if not data:
                     break
                 sha1.update(data)
-    except IOError as e: # Specific error type
-        logging.error(f"Error reading file {filepath} for checksum calculation: {e}")
-        sys.exit(1) # Exit if file can't be read
+    except IOError as e:  # Specific error type
+        logging.error(
+            f"Error reading file {filepath} for checksum calculation: {e}"
+        )
+        sys.exit(1)  # Exit if file can't be read
     return sha1.hexdigest()
 
 
@@ -295,37 +361,46 @@ def main():
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
         level=log_level,
-        format='%(asctime)s - %(levelname)s - %(module)s - %(message)s', # Added module to format
+        format='%(asctime)s - %(levelname)s - %(module)s - %(message)s',  # Added module
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
+
     logging.info(f"Starting Plex Update Script v{SCRIPT_VERSION}")
     logging.debug(f"Full script arguments: {args}")
 
-    check_tool_availability('gdebi') # Ensure gdebi is available
+    check_tool_availability('gdebi')  # Ensure gdebi is available
 
     # Construct the absolute path to the configuration file
     config_file_path = SCRIPT_DIR / "info.ini"
     logging.debug(f"Configuration file path: {config_file_path}")
     config = load_config(config_file_path)
-    
+
     plex_api_response = fetch_plex_server_info(PLEX_JSON_URL_DEFAULT)
-    if not plex_api_response: # fetch_plex_server_info now returns None on failure
+    if not plex_api_response:  # fetch_plex_server_info now returns None on failure
         logging.error("Exiting due to failure in fetching Plex server info.")
         sys.exit(1)
 
-    config = check_and_perform_update(config, plex_api_response, args.architecture, args.dry_run, args.download_only)
-    
-    # Save configuration only if not a dry run and if any changes were made (implicitly handled by main flow)
+    config = check_and_perform_update(
+        config, plex_api_response, args.architecture,
+        args.dry_run, args.download_only
+    )
+
+    # Save configuration only if not a dry run
     if not args.dry_run:
         save_config(config_file_path, config)
     else:
-        logging.info("Dry run complete. No changes were made to the system or configuration file.")
-        
+        logging.info(
+            "Dry run complete. No changes were made to the system or "
+            "configuration file."
+        )
+
     logging.info("Plex Update Script finished.")
 
 
-def check_and_perform_update(config: configparser.ConfigParser, plex_api_response: dict, chosen_architecture: str, dry_run: bool, download_only: bool) -> configparser.ConfigParser:
+def check_and_perform_update(
+    config: configparser.ConfigParser, plex_api_response: dict,
+    chosen_architecture: str, dry_run: bool, download_only: bool
+) -> configparser.ConfigParser:
     """
     Checks for Plex updates and performs actions based on flags.
 
@@ -345,46 +420,87 @@ def check_and_perform_update(config: configparser.ConfigParser, plex_api_respons
                                    Returns the original config if no release info is found
                                    or if in dry_run mode where no changes are applied.
     """
-    release_info = extract_release_info(plex_api_response, chosen_architecture)
+    release_info = extract_release_info(
+        plex_api_response, chosen_architecture
+    )
 
     if not release_info:
-        logging.warning(f"Could not find suitable release information for architecture: {chosen_architecture}")
-        return config # Return original config if no release info found
+        logging.warning(
+            f"Could not find suitable release information for "
+            f"architecture: {chosen_architecture}"
+        )
+        return config  # Return original config if no release info found
 
     # Ensure the architecture section exists in the config
     if not config.has_section(chosen_architecture):
-        logging.warning(f"Missing section for '{chosen_architecture}' in config file. Creating it.")
+        logging.warning(
+            f"Missing section for '{chosen_architecture}' in config file. "
+            "Creating it."
+        )
         config.add_section(chosen_architecture)
-        # Initialize with placeholder values, as they will be updated if a new version is found.
+        # Initialize with placeholder values
         config[chosen_architecture]['checksum'] = ''
         config[chosen_architecture]['url'] = ''
         config[chosen_architecture]['version'] = 'N/A'
 
+    current_version_in_config = config.get(
+        chosen_architecture, 'version', fallback='N/A'
+    )
+    current_checksum_in_config = config.get(
+        chosen_architecture, 'checksum', fallback=''
+    )
 
-    current_version_in_config = config.get(chosen_architecture, 'version', fallback='N/A')
-    current_checksum_in_config = config.get(chosen_architecture, 'checksum', fallback='')
-    
-    logging.info(f'Current Plex version in config for {chosen_architecture}: "{current_version_in_config}" (Checksum: {current_checksum_in_config[:7]}...)')
-    logging.info(f'Latest available Plex version for {chosen_architecture}: "{release_info["version"]}" (Checksum: {release_info["checksum"][:7]}...)')
+    log_msg_current = (
+        f'Current Plex version in config for {chosen_architecture}: '
+        f'"{current_version_in_config}" '
+        f'(Checksum: {current_checksum_in_config[:7]}...)'
+    )
+    logging.info(log_msg_current)
+    log_msg_latest = (
+        f'Latest available Plex version for {chosen_architecture}: '
+        f'"{release_info["version"]}" '
+        f'(Checksum: {release_info["checksum"][:7]}...)'
+    )
+    logging.info(log_msg_latest)
 
     if current_checksum_in_config != release_info['checksum']:
         logging.info(f"New version available for {chosen_architecture}.")
-        logging.info(f"  Current version: {current_version_in_config} (Checksum: {current_checksum_in_config[:7]}...)")
-        logging.info(f"  New version: {release_info['version']} (Checksum: {release_info['checksum'][:7]}...)")
+        logging.info(
+            f"  Current version: {current_version_in_config} "
+            f"(Checksum: {current_checksum_in_config[:7]}...)"
+        )
+        logging.info(
+            f"  New version: {release_info['version']} "
+            f"(Checksum: {release_info['checksum'][:7]}...)"
+        )
 
         if dry_run:
-            logging.info(f"Dry run: Update available for {chosen_architecture} to version {release_info['version']}.")
+            log_msg_dry_run_update = (
+                f"Dry run: Update available for {chosen_architecture} to "
+                f"version {release_info['version']}."
+            )
+            logging.info(log_msg_dry_run_update)
             logging.info(f"Dry run: Would download from {release_info['url']}.")
-            logging.info(f"Dry run: Would update config checksum to {release_info['checksum']} and version to {release_info['version']}.")
-            return config # Return original config, no changes made in dry run
+            log_msg_dry_run_checksum = (
+                f"Dry run: Would update config checksum to "
+                f"{release_info['checksum']} and version to "
+                f"{release_info['version']}."
+            )
+            logging.info(log_msg_dry_run_checksum)
+            return config  # Return original config, no changes made in dry run
 
         # Update config details for the new version
         config[chosen_architecture]['checksum'] = release_info['checksum']
         config[chosen_architecture]['url'] = release_info['url']
         config[chosen_architecture]['version'] = release_info['version']
-        logging.info(f"Updated configuration for {chosen_architecture} with new version details.")
+        logging.info(
+            f"Updated configuration for {chosen_architecture} with new "
+            "version details."
+        )
 
-        release_notes = plex_api_response.get('computer', {}).get('Linux', {}).get('items_fixed')
+        release_notes = plex_api_response.get('computer', {}) \
+                                        .get('Linux', {}) \
+                                        .get('items_fixed')
         if release_notes:
             logging.info(f"Release notes:\n{release_notes}")
         
