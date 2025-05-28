@@ -128,7 +128,9 @@ def install_plex(
                 cmd.insert(0, 'sudo')  # Prepend sudo
                 logging.info('Installing as SUDO.')
             else:
-                logging.info("Installation aborted by user due to sudo denial.")
+                logging.info(
+                    "Installation aborted by user due to sudo denial."
+                )
                 if deb_file_path.exists():  # Clean up
                     deb_file_path.unlink()
                     logging.info(f"Removed temporary file: {deb_file_path}")
@@ -260,7 +262,9 @@ def parse_arguments() -> argparse.Namespace:
         and 'download_only'.
     """
     parser = argparse.ArgumentParser(
-        description="Installs/updates Plex Media Server on Debian-based systems."
+        description=(
+            "Installs/updates Plex Media Server on Debian-based systems."
+        )
     )
     parser.add_argument(
         'architecture',
@@ -368,7 +372,9 @@ def main():
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
         level=log_level,
-        format='%(asctime)s - %(levelname)s - %(module)s - %(message)s',  # Added module
+        format=(
+            '%(asctime)s - %(levelname)s - %(module)s - %(message)s'
+        ),  # Added module
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
@@ -487,7 +493,9 @@ def check_and_perform_update(
                 f"version {release_info['version']}."
             )
             logging.info(log_msg_dry_run_update)
-            logging.info(f"Dry run: Would download from {release_info['url']}.")
+            logging.info(
+                f"Dry run: Would download from {release_info['url']}."
+            )
             log_msg_dry_run_checksum = (
                 f"Dry run: Would update config checksum to "
                 f"{release_info['checksum']} and version to "
@@ -517,7 +525,8 @@ def check_and_perform_update(
             choice=chosen_architecture,
             expected_checksum=release_info['checksum'],
             download_only=download_only,
-            dry_run=dry_run  # This will be False here as dry_run is handled above
+            dry_run=dry_run  # This will be False here as dry_run is
+                             # handled above
         )
         
         # If full installation failed (not download_only mode), we might
@@ -529,8 +538,8 @@ def check_and_perform_update(
                 "Installation was not successful. Configuration might be out "
                 "of sync if not for sys.exit in install_plex."
             )
-            # Potentially revert config changes here if install_plex didn't exit
-            # For now, this path is unlikely due to sys.exit in install_plex
+            # Potentially revert config changes here if install_plex
+            # didn't exit
             pass
     else:
         if dry_run:
@@ -562,7 +571,9 @@ def fetch_plex_server_info(
     logging.debug(f"Fetching Plex server info from: {plex_json_url}")
     try:
         # Using urllib.request as per original code
-        with urllib.request.urlopen(plex_json_url, timeout=timeout) as response:
+        with urllib.request.urlopen(
+            plex_json_url, timeout=timeout
+        ) as response:
             if response.status != 200:  # Check HTTP status
                 logging.error(
                     "Error fetching Plex version information: "
@@ -584,7 +595,8 @@ def fetch_plex_server_info(
         return None
     except json.JSONDecodeError as e:  # Catches errors parsing JSON
         logging.error(
-            f"Error parsing Plex version information (JSONDecodeError): {e.msg}"
+            f"Error parsing Plex version information "
+            f"(JSONDecodeError): {e.msg}"
         )
         # Log part of the failing response for debugging
         logging.debug(
@@ -668,7 +680,9 @@ def extract_release_info(
     expected_build_arch = build_arch_map.get(architecture_choice)
 
     if not expected_build_arch:
-        logging.error(f"Unsupported architecture choice: {architecture_choice}")
+        logging.error(
+            f"Unsupported architecture choice: {architecture_choice}"
+        )
         return None  # Should not happen due to argparse choices
 
     for release in releases:
