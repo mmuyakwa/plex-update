@@ -1,0 +1,38 @@
+name: Python Linting
+
+on:
+  push:
+    branches: [ master, plex-updater-refactor ]
+  pull_request:
+    branches: [ master, plex-updater-refactor ]
+
+jobs:
+  lint:
+    name: Lint with flake8
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.9' # Using a reasonably modern Python version
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8 # Install flake8
+
+    - name: Lint with flake8
+      run: |
+        flake8 plex-update.py --count --show-source --statistics
+        # The above command will exit with non-zero if errors are found, failing the step.
+
+    - name: Test script execution --help
+      run: python3 plex-update.py --help
+
+    - name: Test script execution --version
+      run: python3 plex-update.py --version
